@@ -75,7 +75,4 @@ If arguments are provided, replace the `find` command with those specific paths.
 
 ## After generating
 
-Tell me:
-- File count and total size
-- Whether it fits in a single paste (~100K chars for most LLMs)
-- If it's too large, suggest which directories or files to exclude and rerun
+Tell me the file count, total size, and line count.
