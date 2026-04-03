@@ -1,67 +1,100 @@
 ---
-description: Stop AI from inventing frameworks when stdlib is enough
+description: Stop AI from reinventing the wheel — use existing libraries properly
 ---
 
 ## The AI Creativity Issue
 
-AI agents and models are wired for "cleverness." Give them a straightforward task—like fetching data from an API, parsing a config file, or handling basic user input—and they often respond by inventing an entire custom framework, wrapper library, or "enterprise-grade" solution from scratch.
+AI agents are trained to be helpful problem-solvers, but that training often pushes them toward over-engineering. When you give them a simple request — "call this API and handle the response" — they frequently ignore mature, battle-tested libraries and instead start building a brand-new wrapper, custom client class, or mini-framework "for robustness."
 
-Instead of reaching for the battle-tested tools already sitting in the standard library, they spin up new classes, decorators, context managers, custom exception hierarchies, and dependency injection layers "just in case." The result? Code that feels impressive in the moment but quietly piles on complexity, hidden dependencies, and maintenance headaches that no one asked for.
+The result is the same every time: extra files, custom retry logic, homemade auth layers, and exception hierarchies that duplicate what the community has already solved perfectly. This isn't creativity; it's unnecessary reinvention that bloats the codebase and creates long-term maintainer debt.
 
-### AI's Typical "Creative" Output
+### What the AI usually generates
 ```python
-class ApiClientFactory:
-    def __init__(self, base_url: str, auth_strategy: AuthStrategy = None):
-        self.session = self._build_resilient_session()
-        self.auth = auth_strategy or OAuth2Strategy()
-        self.retry_policy = ExponentialBackoffPolicy()
+# AI's "robust" solution — a full custom client from scratch
+class EnterpriseApiClient:
+    def __init__(self, base_url, api_key):
+        self.session = self._create_resilient_session()
+        self.auth = CustomOAuthHandler(api_key)
+        self.retry_policy = SmartBackoffStrategy(max_retries=5)
 
-    async def execute_request(self, endpoint: str, payload: dict = None) -> ApiResponse:
-        # 200+ lines of custom retry logic, logging, circuit breakers,
-        # telemetry hooks, and transformation pipelines...
+    async def call(self, endpoint, payload=None, method="GET"):
+        # 150+ lines of custom circuit-breaker, telemetry,
+        # response transformation, and error classification...
         ...
 ```
 
-This isn't an exaggeration. The model sees a simple HTTP call and immediately dreams up a full-featured client "for scalability."
+This looks professional, but it's reinventing the wheel in the worst way.
 
-### The Reality Most Teams Actually Need
+### The correct approach
+Sometimes you *do* need robust configuration: retries, timeouts, authentication, rate-limiting, logging, and graceful error handling. That's completely valid. The key is to reach for the libraries the entire community has already refined for exactly these problems instead of writing your own.
+
+**Python example (using the de-facto standard library everyone actually uses):**
 ```python
 import requests
-from requests.exceptions import RequestException
+from requests.adapters import HTTPAdapter
+from requests.packages.urllib3.util.retry import Retry
 
-def fetch_api_data(url: str, params: dict = None) -> dict:
-    """One clear function using the standard library. No surprises."""
-    try:
-        response = requests.get(url, params=params, timeout=10)
-        response.raise_for_status()
-        return response.json()
-    except RequestException as e:
-        # Log once, raise a clear error—done.
-        raise RuntimeError(f"API request failed: {e}") from e
+def get_robust_session() -> requests.Session:
+    """One-time setup for a properly configured, battle-tested client."""
+    session = requests.Session()
+    
+    retry_strategy = Retry(
+        total=5,
+        backoff_factor=1,
+        status_forcelist=[429, 500, 502, 503, 504]
+    )
+    adapter = HTTPAdapter(max_retries=retry_strategy)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    
+    session.headers.update({"User-Agent": "MyApp/1.0"})
+    return session
+
+# Usage — clean, simple, zero custom wrappers
+session = get_robust_session()
+response = session.get("https://api.example.com/data", timeout=10)
+response.raise_for_status()
+data = response.json()
 ```
 
-Same outcome. Zero new files, zero custom classes, zero tech debt.
+**JavaScript example (Axios — the community standard):**
+```js
+import axios from 'axios';
 
-### Why AIs Default to This Pattern
-- **Training data skew**: Most public code the model learned from showcases "production-ready" architectures written by engineers trying to look forward-thinking, not the quiet, stdlib-heavy scripts that actually keep companies running.
-- **Creativity bias**: Models are rewarded during training for generating novel, complete-looking solutions. Using `requests` or `json` or `os` feels too "basic" to the pattern-matching engine.
-- **No long-term memory of your codebase**: The AI doesn't know your team size, your deployment constraints, or that every extra file added today will be cursed by the on-call engineer six months from now.
-- **Zero cost for complexity**: Generating 300 lines of new code costs the model nothing. The human (or future agent) paying the maintenance bill is invisible during generation.
+const api = axios.create({
+  baseURL: 'https://api.example.com',
+  timeout: 10000,
+  headers: { 'User-Agent': 'MyApp/1.0' },
+  validateStatus: status => status < 500   // only treat 5xx as errors
+});
 
-### The Real Gift: Ruthless Simplicity
-Demand code that does the following instead:
+// Axios already ships with interceptors, retry plugins, and adapters
+api.interceptors.response.use(
+  response => response,
+  error => { /* one shared error handler */ }
+);
+```
 
-- Defaults to the language's standard library first, always. Only reach for third-party packages when the stdlib genuinely cannot solve the problem.
-- Treats every new class, decorator, or helper file as a liability until proven otherwise through repeated real pain.
-- Keeps functions small, obvious, and import-light. If a junior engineer (or another AI agent) has to read it at 3 a.m., they should understand it in under 30 seconds.
-- Documents *why* a decision was made, never *what* the code is doing—especially when choosing the boring stdlib path over a flashy custom one.
-- Refactors early and often to delete custom code that turned out to be unnecessary. The best AI output is the output you can safely delete later without regret.
+### Why the AI keeps reinventing the wheel
+- It was rewarded in training for producing "complete" and "production-ready" looking code.
+- It doesn't inherently know which libraries are the accepted standard in your ecosystem.
+- Creating new code feels more impressive than a one-line `import requests` or `import axios`.
+- The long-term cost of maintenance is invisible to the model at generation time.
 
-**Bottom line**: True creativity in software isn't inventing new wheels. It's knowing when the wheel you already have is more than enough—and having the discipline to stop there.
+### The rule that fixes it
+**Never write your own HTTP client, auth wrapper, retry engine, or similar unless you have a genuinely unique requirement that no existing library satisfies.**
 
-When you catch an AI slipping into "creativity mode," push back immediately with one question:
-*"Can this be done with only the standard library? If yes, rewrite it that way."*
+Mature libraries like:
+- `requests` + `urllib3` (Python)
+- Axios (JavaScript)
+- Fetch + `ky` or `ofetch` (modern JS)
+- `http4s`, `okhttp`, `retrofit` (JVM), etc.
 
-That single rule will save your codebase more pain than any architecture diagram ever could.
+exist for a reason. They are battle-tested by millions of developers, receive security updates, and are actively maintained. Using them with proper configuration gives you all the robustness you actually need — without the hidden cost of maintaining yet another custom abstraction.
+
+When an AI starts inventing a new client class, stop it immediately and ask:
+"Can this be solved by configuring an existing, widely-adopted library instead of writing our own?"
+
+If the answer is yes, rewrite it that way. That single habit is one of the highest-leverage ways to keep a codebase clean, maintainable, and free of self-inflicted tech debt.
 
 $ARGUMENTS
