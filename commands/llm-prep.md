@@ -2,46 +2,80 @@
 description: Crawl a codebase and produce a markdown context document for pasting into another LLM
 ---
 
-Crawl this project and produce a single markdown document that can be pasted into an LLM web UI (Claude.ai, ChatGPT, etc.) as context.
+Generate a context document from this project for pasting into an LLM web UI.
 
-## What to do
+**IMPORTANT: Do NOT use the Write tool or Read tool to build this file. Use a single Bash command to generate the entire document.**
 
-1. **Show the project tree.** Run `tree -L 3 -I "node_modules|.git|dist|build|__pycache__|venv|.venv|env|.env|*.pyc|.DS_Store|.idea|.vscode|coverage|.next|.nuxt|.cache|out|target|vendor|bin|*.log|logs|*.egg-info|.pytest_cache|.mypy_cache|htmlcov|.nyc_output|bower_components|.terraform|.serverless" --charset ascii` or equivalent. If `tree` is not available, use Glob to list the structure.
+## How to generate
 
-2. **Collect all text files.** Read every source file in the project (code, config, docs). Skip binary files, images, lock files (`package-lock.json`, `yarn.lock`, `poetry.lock`, `Cargo.lock`, `go.sum`), and anything in the ignored directories above.
+Run a single bash script that:
+1. Writes the tree structure at the top
+2. Finds all source files
+3. Concatenates their contents with headers
 
-3. **Format as a single markdown document** with this structure:
+Use this exact pattern (adjust the file extensions for the project type):
 
+```bash
+IGNORE="node_modules|.git|dist|build|__pycache__|venv|.venv|.env|*.pyc|.DS_Store|.idea|.vscode|coverage|.next|.nuxt|.cache|out|target|vendor|*.log|logs|*.egg-info|.pytest_cache|.mypy_cache|htmlcov|.nyc_output|bower_components|.terraform|.serverless|context.md"
+
+{
+  echo "# Project Context: $(basename $(pwd))"
+  echo "Generated: $(date)"
+  echo ""
+  echo "## Project Structure"
+  echo '```'
+  tree -L 3 -I "$IGNORE" --charset ascii 2>/dev/null || find . -not -path '*/node_modules/*' -not -path '*/.git/*' -not -path '*/dist/*' -not -path '*/__pycache__/*' -not -path '*/venv/*' -type f | head -200
+  echo '```'
+  echo ""
+  echo "## File Contents"
+  echo ""
+  find . -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.js" -o -name "*.jsx" -o -name "*.py" -o -name "*.go" -o -name "*.rs" -o -name "*.java" -o -name "*.c" -o -name "*.cpp" -o -name "*.h" -o -name "*.rb" -o -name "*.php" -o -name "*.swift" -o -name "*.kt" -o -name "*.sh" -o -name "*.sql" -o -name "*.graphql" -o -name "*.proto" -o -name "*.html" -o -name "*.css" -o -name "*.scss" -o -name "*.json" -o -name "*.yaml" -o -name "*.yml" -o -name "*.toml" -o -name "*.md" -o -name "*.txt" -o -name "*.xml" -o -name "*.env.example" -o -name "Dockerfile" -o -name "Makefile" \) \
+    -not -path '*/node_modules/*' \
+    -not -path '*/.git/*' \
+    -not -path '*/dist/*' \
+    -not -path '*/build/*' \
+    -not -path '*/__pycache__/*' \
+    -not -path '*/venv/*' \
+    -not -path '*/.venv/*' \
+    -not -path '*/coverage/*' \
+    -not -path '*/.next/*' \
+    -not -path '*/.cache/*' \
+    -not -path '*/target/*' \
+    -not -path '*/vendor/*' \
+    -not -path '*/*.egg-info/*' \
+    -not -path '*/context.md' \
+    -not -name 'package-lock.json' \
+    -not -name 'yarn.lock' \
+    -not -name 'pnpm-lock.yaml' \
+    -not -name 'poetry.lock' \
+    -not -name 'Cargo.lock' \
+    -not -name 'go.sum' \
+    -not -name 'composer.lock' \
+    | sort | while read -r file; do
+      echo "### $file"
+      echo '```'
+      cat "$file"
+      echo ""
+      echo '```'
+      echo ""
+    done
+} > context.md
+
+wc -c context.md | awk '{printf "Generated context.md — %d characters (%d KB)\n", $1, $1/1024}'
+wc -l context.md | awk '{printf "Lines: %d\n", $1}'
 ```
-# Project Context: [project name]
-Generated: [date]
 
-## Project Structure
-[tree output]
-
-## File Contents
-
-### path/to/file.ext
-\`\`\`[language]
-[file contents]
-\`\`\`
-
-### path/to/another.ext
-\`\`\`[language]
-[file contents]
-\`\`\`
-```
-
-4. **If files are large (>500 lines),** include a summary comment at the top noting what the file does, then include the full content.
-
-5. **If the total output would exceed ~100K characters,** prioritize: README, config files, entry points, then source files by directory depth (shallower first). Note what was skipped.
+Adapt the file extensions in the `find` command based on the project. For example, a Python-only project only needs `*.py *.txt *.md *.toml *.yaml *.yml *.json`.
 
 ## If I specify files or directories
 
 $ARGUMENTS
 
-If arguments are provided, focus only on those paths instead of the full project. Still include the project tree for orientation.
+If arguments are provided, replace the `find` command with those specific paths. Still include the tree at the top.
 
-## Output
+## After generating
 
-Write the result to a file called `context.md` in the project root, and also print it to the terminal. Tell me the character count and file count so I know if it fits in a single paste.
+Tell me:
+- File count and total size
+- Whether it fits in a single paste (~100K chars for most LLMs)
+- If it's too large, suggest which directories or files to exclude and rerun
